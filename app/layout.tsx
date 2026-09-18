@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Lora } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { RoleProvider } from "@/components/content/RoleContext";
+import { ErrorBoundary } from "@/components/content/ErrorBoundary";
+import { ErrorLogger } from "@/components/content/ErrorLogger";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,7 +33,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        <RoleProvider>{children}</RoleProvider>
+        <ErrorLogger />
+        <ErrorBoundary>
+          <RoleProvider>{children}</RoleProvider>
+        </ErrorBoundary>
         <Toaster position="bottom-right" />
       </body>
     </html>

@@ -17,6 +17,7 @@ import {
 import { useRequiredRole } from "./RoleContext";
 import { SimpleMarkdown } from "./SimpleMarkdown";
 import { ROLE_HEADER, type Role } from "@/lib/role";
+import { logClientError } from "@/lib/log-client-error";
 import { formatDateTime } from "@/lib/format";
 import { SUBSCORE_KEYS, SUBSCORE_LABELS } from "@/lib/rubric";
 import { REVISION_TARGETS, REVISION_TARGET_LABELS } from "@/lib/content-request";
@@ -243,7 +244,12 @@ export function ActionBar({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Could not run the full revision.");
+        const message = data.error ?? "Could not run the full revision.";
+        setError(message);
+        logClientError("action_failed", new Error(message), {
+          path: `/api/content-requests/${request.id}/deep-revise`,
+          status: res.status,
+        });
         setSubmitting(false);
         setDeepRevising(false);
         return;
@@ -252,8 +258,9 @@ export function ActionBar({
       setSubmitting(false);
       setDeepRevising(false);
       onAction(data);
-    } catch {
+    } catch (err) {
       setError("Could not reach the server.");
+      logClientError("action_failed", err, { path: `/api/content-requests/${request.id}/deep-revise` });
       setSubmitting(false);
       setDeepRevising(false);
     }
@@ -274,7 +281,9 @@ export function ActionBar({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+        const message = data.error ?? "Something went wrong.";
+        setError(message);
+        logClientError("action_failed", new Error(message), { path, status: res.status });
         setSubmitting(false);
         return;
       }
@@ -282,8 +291,9 @@ export function ActionBar({
       setNotes("");
       setSubmitting(false);
       onAction(data);
-    } catch {
+    } catch (err) {
       setError("Could not reach the server.");
+      logClientError("action_failed", err, { path });
       setSubmitting(false);
     }
   }

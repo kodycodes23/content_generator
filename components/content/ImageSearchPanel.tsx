@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ImageOff, Loader2, Search, X } from "lucide-react";
+import { logClientError } from "@/lib/log-client-error";
 
 interface ImageResult {
   id: string;
@@ -44,15 +45,21 @@ export function ImageSearchPanel({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Could not search for images.");
+        const message = data.error ?? "Could not search for images.";
+        setError(message);
+        logClientError("action_failed", new Error(message), {
+          path: `/api/content-requests/${requestId}/search-images`,
+          status: res.status,
+        });
         setSearching(false);
         return;
       }
       setResults(data.results ?? []);
       setSearchedFor(data.query ?? query);
       setSearching(false);
-    } catch {
+    } catch (err) {
       setError("Could not reach the server.");
+      logClientError("action_failed", err, { path: `/api/content-requests/${requestId}/search-images` });
       setSearching(false);
     }
   }
@@ -75,13 +82,19 @@ export function ImageSearchPanel({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Could not set this image.");
+        const message = data.error ?? "Could not set this image.";
+        setError(message);
+        logClientError("action_failed", new Error(message), {
+          path: `/api/content-requests/${requestId}/set-image`,
+          status: res.status,
+        });
         setSelectingId(null);
         return;
       }
       onSelected(result.url);
-    } catch {
+    } catch (err) {
       setError("Could not reach the server.");
+      logClientError("action_failed", err, { path: `/api/content-requests/${requestId}/set-image` });
       setSelectingId(null);
     }
   }

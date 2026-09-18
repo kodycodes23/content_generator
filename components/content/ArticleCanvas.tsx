@@ -6,6 +6,7 @@ import { SimpleMarkdown } from "./SimpleMarkdown";
 import { ImageSearchPanel } from "./ImageSearchPanel";
 import { analyzeText } from "@/lib/readability";
 import type { InternalLink } from "@/lib/content-request";
+import { logClientError } from "@/lib/log-client-error";
 
 type SaveState = "idle" | "saving" | "saved";
 
@@ -49,9 +50,15 @@ export function ArticleCanvas({
         setSaveState("saved");
         onSaved({ title: updated.title, article_draft: updated.article_draft });
       } else {
+        const data = await res.json().catch(() => ({}));
+        logClientError("action_failed", new Error(data.error ?? "Autosave failed."), {
+          path: `/api/content-requests/${requestId}`,
+          status: res.status,
+        });
         setSaveState("idle");
       }
-    } catch {
+    } catch (err) {
+      logClientError("action_failed", err, { path: `/api/content-requests/${requestId}` });
       setSaveState("idle");
     }
   }

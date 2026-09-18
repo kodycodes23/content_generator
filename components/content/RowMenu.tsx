@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Trash2 } from "lucide-react";
+import { logClientError } from "@/lib/log-client-error";
 
 export function RowMenu({ id, title }: { id: string; title: string }) {
   const router = useRouter();
@@ -40,13 +41,16 @@ export function RowMenu({ id, title }: { id: string; title: string }) {
       const res = await fetch(`/api/content-requests/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Could not delete this request.");
+        const message = data.error ?? "Could not delete this request.";
+        setError(message);
+        logClientError("action_failed", new Error(message), { path: `/api/content-requests/${id}`, status: res.status });
         setDeleting(false);
         return;
       }
       router.refresh();
-    } catch {
+    } catch (err) {
       setError("Could not reach the server.");
+      logClientError("action_failed", err, { path: `/api/content-requests/${id}` });
       setDeleting(false);
     }
   }

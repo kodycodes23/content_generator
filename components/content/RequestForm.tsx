@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "
 import { AlertCircle, CheckCircle2, FileText, Link2, Loader2, Paperclip, Sparkles, Type as TypeIcon, X } from "lucide-react";
 import type { Audience, Channel } from "@/lib/types";
 import { CHANNEL_LABEL } from "@/lib/format";
+import { logClientError } from "@/lib/log-client-error";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
@@ -118,15 +119,18 @@ export function RequestForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong submitting this request.");
+        const message = data.error ?? "Something went wrong submitting this request.";
+        setError(message);
+        logClientError("action_failed", new Error(message), { path: "/api/content-requests", status: res.status });
         setSubmitting(false);
         return;
       }
 
       setSubmitting(false);
       setSubmittedId(data.id);
-    } catch {
+    } catch (err) {
       setError("Could not reach the server. Check your connection and try again.");
+      logClientError("action_failed", err, { path: "/api/content-requests" });
       setSubmitting(false);
     }
   }
