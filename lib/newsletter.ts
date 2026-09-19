@@ -14,7 +14,11 @@ export type NewsletterContent = NonNullable<ChannelVariants["newsletter"]>;
 // throws on failure (missing config or a Resend-reported error) rather than returning a
 // result, since the two callers roll back/report differently (a single HTTP error vs. a
 // per-row entry in a batch summary) and each already wraps this in its own try/catch.
-export async function sendNewsletterEmail(newsletter: NewsletterContent, fallbackTitle: string): Promise<void> {
+export async function sendNewsletterEmail(
+  newsletter: NewsletterContent,
+  fallbackTitle: string,
+  featuredImageUrl?: string | null,
+): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const recipient = process.env.NOTIFICATION_RECIPIENT_EMAIL;
 
@@ -22,7 +26,15 @@ export async function sendNewsletterEmail(newsletter: NewsletterContent, fallbac
     throw new Error("RESEND_API_KEY or NOTIFICATION_RECIPIENT_EMAIL is not configured on the server.");
   }
 
+  // Same featured image as the article, resized for email rather than the article's own
+  // aspect-[2/1] hero treatment. The `width` HTML attribute (not just CSS) matters here —
+  // Outlook desktop ignores max-width in style and renders at native resolution without it.
+  const imageHtml = featuredImageUrl
+    ? `<img src="${escapeHtml(featuredImageUrl)}" alt="" width="560" style="width:100%;max-width:560px;height:auto;display:block;border-radius:8px;margin-bottom:16px;" />`
+    : "";
+
   const html = `<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0f172a;">
+    ${imageHtml}
     <h2 style="margin-bottom:8px;">${escapeHtml(newsletter.subject_line || fallbackTitle)}</h2>
     ${
       newsletter.preview_text

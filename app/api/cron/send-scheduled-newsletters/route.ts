@@ -67,7 +67,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
         throw new Error("No newsletter content on this request.");
       }
 
-      await sendNewsletterEmail(newsletter, claimed.title);
+      await sendNewsletterEmail(newsletter, claimed.title, claimed.featured_image_url);
 
       // Success: newsletter_sent_at is already set from the claim above — just clear the schedule.
       await supabaseAdmin.from("content_requests").update({ scheduled_send_at: null }).eq("id", request.id);

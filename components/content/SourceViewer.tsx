@@ -17,7 +17,35 @@ function isImageUrl(url: string): boolean {
   return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(url);
 }
 
-function SourceCard({ source, defaultOpen }: { source: ContentRequestSource; defaultOpen: boolean }) {
+interface SourceGroup {
+  source_title: string;
+  source_url: string;
+  facts: string[];
+}
+
+// The research step sometimes pulls several distinct facts from the same underlying page —
+// that's several citations, not several sources. Grouping by URL (falling back to title if
+// a source has no URL) keeps the panel honest about how many places were actually consulted,
+// instead of rendering one identical-looking card per fact.
+function groupSourcesByUrl(sources: ContentRequestSource[]): SourceGroup[] {
+  const groups: SourceGroup[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const source of sources) {
+    const key = source.source_url || source.source_title;
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      groups[existingIndex].facts.push(source.fact);
+      continue;
+    }
+    indexByKey.set(key, groups.length);
+    groups.push({ source_title: source.source_title, source_url: source.source_url, facts: [source.fact] });
+  }
+
+  return groups;
+}
+
+function SourceCard({ group, defaultOpen }: { group: SourceGroup; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -28,14 +56,19 @@ function SourceCard({ source, defaultOpen }: { source: ContentRequestSource; def
         className="flex w-full items-start gap-2.5 px-3.5 py-3 text-left"
       >
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-slate-900">{source.source_title}</span>
-          {source.source_url && (
+          <span className="block truncate text-[13px] font-medium text-slate-900">{group.source_title}</span>
+          {group.source_url && (
             <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-400">
               <ExternalLink className="h-3 w-3 shrink-0" />
-              {hostnameOf(source.source_url)}
+              {hostnameOf(group.source_url)}
             </span>
           )}
         </span>
+        {group.facts.length > 1 && (
+          <span className="mt-0.5 shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+            {group.facts.length} citations
+          </span>
+        )}
         <ChevronDown
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
         />
@@ -43,15 +76,19 @@ function SourceCard({ source, defaultOpen }: { source: ContentRequestSource; def
 
       {open && (
         <div className="border-t border-slate-100 px-3.5 py-3">
-          <blockquote className="flex gap-2 text-xs leading-relaxed text-slate-600">
-            <Quote className="h-3.5 w-3.5 shrink-0 text-slate-300" />
-            <span>{source.fact}</span>
-          </blockquote>
+          <div className="space-y-2.5">
+            {group.facts.map((fact, i) => (
+              <blockquote key={i} className="flex gap-2 text-xs leading-relaxed text-slate-600">
+                <Quote className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                <span>{fact}</span>
+              </blockquote>
+            ))}
+          </div>
 
-          {source.source_url && (
+          {group.source_url && (
             <div className="mt-3 flex justify-end">
               <a
-                href={source.source_url}
+                href={group.source_url}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:text-indigo-800"
@@ -78,6 +115,9 @@ export function SourceViewer({
   researchedAt: string | undefined;
   attachmentUrl?: string | null;
 }) {
+  const groups = groupSourcesByUrl(sources);
+  const citationCount = sources.length;
+
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-4 py-3.5">
@@ -86,7 +126,8 @@ export function SourceViewer({
           Sources &amp; Verification
         </div>
         <p className="mt-1 text-[11px] text-slate-400">
-          {sources.length} {sources.length === 1 ? "source" : "sources"} informed this draft
+          {groups.length} {groups.length === 1 ? "source" : "sources"}
+          {citationCount > groups.length ? ` · ${citationCount} citations` : ""} informed this draft
           {typeof evaluationReport?.scores?.grounding === "number"
             ? ` · grounding ${evaluationReport.scores.grounding.toFixed(1)}/10`
             : ""}
@@ -130,8 +171,8 @@ export function SourceViewer({
             No sources extracted yet.
           </div>
         ) : (
-          sources.map((source, i) => (
-            <SourceCard key={`${source.source_url}-${i}`} source={source} defaultOpen={i === 0} />
+          groups.map((group, i) => (
+            <SourceCard key={`${group.source_url}-${i}`} group={group} defaultOpen={i === 0} />
           ))
         )}
       </div>

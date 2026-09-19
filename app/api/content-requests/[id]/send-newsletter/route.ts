@@ -50,7 +50,7 @@ export async function POST(_req: NextRequest, ctx: RouteContext<"/api/content-re
   const request = normalizeContentRequestRow(claimedRow as RawContentRequestRow);
 
   try {
-    await sendNewsletterEmail(newsletter, request.title);
+    await sendNewsletterEmail(newsletter, request.title, request.featured_image_url);
   } catch (err) {
     // The lock was claimed but nothing was actually delivered — release it so this can be retried.
     await supabaseAdmin.from("content_requests").update({ newsletter_sent_at: null }).eq("id", id);
