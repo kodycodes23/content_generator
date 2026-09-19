@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, FileText, Link2, Loader2, Paperclip, Sparkle
 import type { Audience, Channel } from "@/lib/types";
 import { CHANNEL_LABEL } from "@/lib/format";
 import { logClientError } from "@/lib/log-client-error";
+import { SimilarTopicDialog, type SimilarMatch } from "./SimilarTopicDialog";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
@@ -33,6 +34,8 @@ export function RequestForm() {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordDraft, setKeywordDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [checkingSimilar, setCheckingSimilar] = useState(false);
+  const [similarMatches, setSimilarMatches] = useState<SimilarMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
 
@@ -103,6 +106,28 @@ export function RequestForm() {
       return;
     }
 
+    setError(null);
+    setCheckingSimilar(true);
+    try {
+      const res = await fetch("/api/content-requests/check-similar-topic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: topic.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.similar) && data.similar.length > 0) {
+        setCheckingSimilar(false);
+        setSimilarMatches(data.similar);
+        return;
+      }
+    } catch {
+      // Advisory only — never blocks submission. Fall through to submitting normally.
+    }
+    setCheckingSimilar(false);
+    await submitRequest();
+  }
+
+  async function submitRequest() {
     setError(null);
     setSubmitting(true);
 
@@ -346,10 +371,15 @@ export function RequestForm() {
       <div className="flex items-center justify-end gap-3 pb-4">
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || checkingSimilar}
           className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? (
+          {checkingSimilar ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking for similar content…
+            </>
+          ) : submitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               Starting pipeline…
@@ -362,6 +392,17 @@ export function RequestForm() {
           )}
         </button>
       </div>
+
+      {similarMatches && (
+        <SimilarTopicDialog
+          matches={similarMatches}
+          onCancel={() => setSimilarMatches(null)}
+          onProceed={() => {
+            setSimilarMatches(null);
+            void submitRequest();
+          }}
+        />
+      )}
     </form>
   );
 }
