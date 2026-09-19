@@ -16,6 +16,11 @@ const CHANNEL_FIT_LABELS: Record<string, string> = {
   quote_cards: "Quote Cards",
 };
 
+const STATUS_LOG_LABELS = {
+  submission_status: "Recalled submission",
+  approval_status: "Recalled approval",
+} as const;
+
 const CHANNEL_FIT_ORDER = ["linkedin", "twitter_thread", "newsletter", "quote_cards"] as const;
 
 function SubscoreTile({ label, score }: { label: string; score: number }) {
@@ -84,7 +89,9 @@ function RevisionEntryRow({ entry }: { entry: RevisionHistoryEntry }) {
 
       {entry.target && (
         <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-indigo-600">
-          Targeted edit — {REVISION_TARGET_LABELS[entry.target]}
+          {entry.target === "submission_status" || entry.target === "approval_status"
+            ? STATUS_LOG_LABELS[entry.target]
+            : `Targeted edit — ${REVISION_TARGET_LABELS[entry.target]}`}
         </p>
       )}
 

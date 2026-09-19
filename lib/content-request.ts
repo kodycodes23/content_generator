@@ -45,6 +45,13 @@ export const REVISION_TARGET_LABELS: Record<RevisionTarget, string> = {
   quote_cards: "Quote Cards",
 };
 
+// Two lightweight, content-untouched status reversals (Writer recalling a submission,
+// Manager recalling an approval) log their own revision_history entry too, but they aren't
+// content-field edits — kept as a separate type so they never leak into REVISION_TARGETS/
+// REVISION_TARGET_LABELS (the targeted-revise dropdown), which only lists real content fields.
+export type StatusLogTarget = "submission_status" | "approval_status";
+export type RevisionLogTarget = RevisionTarget | StatusLogTarget;
+
 // A single diff-part, matching the shape the `diff` package's diffWords() returns
 // (trimmed down to compact context) — used to render a highlighted before/after in the UI.
 export interface DiffPart {
@@ -65,7 +72,8 @@ export interface RevisionHistoryEntry {
   approval_status_after: "pass" | "revise" | "reject" | null;
   // Only present on targeted-revise entries — which field was edited, and a compact
   // before/after diff (JSON-encoded DiffPart[]) for the revision history UI to highlight.
-  target?: RevisionTarget;
+  // Also present (as a StatusLogTarget) on the lightweight recall/recall-approval entries.
+  target?: RevisionLogTarget;
   diff_summary?: string;
 }
 

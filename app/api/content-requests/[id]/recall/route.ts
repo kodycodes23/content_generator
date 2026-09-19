@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { normalizeContentRequestRow, type RawContentRequestRow, type RevisionHistoryEntry } from "@/lib/content-request";
+import type { RevisionHistoryEntry } from "@/lib/content-request";
 import { getRoleFromHeaders } from "@/lib/role";
+import { revertStatusWithLog } from "@/lib/revert-status";
 
 // Lets a Content Writer pull a request back out of the approval queue before a Manager has
 // acted on it — e.g. they noticed a mistake right after hitting "Send for Approval". Pure
@@ -15,9 +16,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/content-req
     return NextResponse.json({ error: "Only a Content Writer can recall a submission." }, { status: 403 });
   }
 
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const { data: current, error: fetchError } = await supabaseAdmin
+  const { data: current, error: fetchError } = await getSupabaseAdmin()
     .from("content_requests")
     .select("status, revision_history")
     .eq("id", id)
@@ -27,38 +26,24 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/content-req
     return NextResponse.json({ error: "Content request not found." }, { status: 404 });
   }
 
+  const alreadyReviewedMessage = "This request has already been reviewed and can no longer be recalled.";
   if (current.status !== "submitted_for_approval") {
-    return NextResponse.json(
-      { error: "This request has already been reviewed and can no longer be recalled." },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: alreadyReviewedMessage }, { status: 409 });
   }
 
-  const existingHistory = (current.revision_history ?? []) as RevisionHistoryEntry[];
-  const newEntry: RevisionHistoryEntry = {
-    revision_number: existingHistory.length + 1,
-    timestamp: new Date().toISOString(),
-    triggered_by: "content_writer",
-    reviewer_notes: "Recalled from approval queue",
-    score_before: null,
-    score_after: null,
-    approval_status_after: null,
-  };
+  const updated = await revertStatusWithLog({
+    id,
+    fromStatus: "submitted_for_approval",
+    toStatus: "pending_human_review",
+    existingHistory: (current.revision_history ?? []) as RevisionHistoryEntry[],
+    triggeredBy: "content_writer",
+    reviewerNotes: "Recalled from approval queue",
+    target: "submission_status",
+  });
 
-  const { data, error } = await supabaseAdmin
-    .from("content_requests")
-    .update({ status: "pending_human_review", revision_history: [...existingHistory, newEntry] })
-    .eq("id", id)
-    .eq("status", "submitted_for_approval")
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json(
-      { error: "This request has already been reviewed and can no longer be recalled." },
-      { status: 409 },
-    );
+  if (!updated) {
+    return NextResponse.json({ error: alreadyReviewedMessage }, { status: 409 });
   }
 
-  return NextResponse.json(normalizeContentRequestRow(data as RawContentRequestRow));
+  return NextResponse.json(updated);
 }

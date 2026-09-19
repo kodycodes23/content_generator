@@ -145,6 +145,9 @@ export function ActionBar({
   // server-side too), but from that point on either of them can trigger it.
   const canSendNewsletter = request.status === "approved" && !locked && !!newsletterVariant;
   const isApprovedView = request.status === "approved" && !locked; // the shared send/schedule/(publish) block, for either role
+  // Lets a Manager pull a request back out of "approved" for another look before it's
+  // actually sent — same idea as the Writer's Recall submission, one status back.
+  const canRecallApproval = role === "manager" && isApprovedView;
 
   // Criteria below the 7/10 quality bar — drives the "Full revision" option's preview text
   // and whether it's available at all. Mirrors the same threshold deep-revise enforces
@@ -303,16 +306,18 @@ export function ActionBar({
     }
   }
 
-  async function handleRecall() {
+  // Shared by both recall-style actions (Writer recalling a submission, Manager recalling
+  // an approval) — same confirm-then-post-then-reload-on-stale-409 shape either way.
+  async function recallAction(endpoint: string, confirmMessage: string, defaultErrorMessage: string) {
     if (isMock) {
       setError("This is example data — actions aren't wired to a real request.");
       return;
     }
-    if (!window.confirm("Are you sure you want to pull this back from review?")) return;
+    if (!window.confirm(confirmMessage)) return;
 
     setSubmitting(true);
     setError(null);
-    const path = `/api/content-requests/${request.id}/recall`;
+    const path = `/api/content-requests/${request.id}/${endpoint}`;
     try {
       const res = await fetch(path, {
         method: "POST",
@@ -320,14 +325,14 @@ export function ActionBar({
       });
       const data = await res.json();
       if (!res.ok) {
-        const message = data.error ?? "Could not recall this submission.";
+        const message = data.error ?? defaultErrorMessage;
         setError(message);
         logClientError("action_failed", new Error(message), { path, status: res.status });
         setSubmitting(false);
         if (res.status === 409) {
-          // Stale view — a Manager already acted on it. Reload shortly so the writer sees
-          // the real current status instead of continuing to look at an approval-queue view
-          // that no longer reflects reality.
+          // Stale view — the state moved on since this page loaded. Reload shortly so the
+          // user sees the real current status instead of continuing to look at a view that
+          // no longer reflects reality.
           window.setTimeout(() => window.location.reload(), 1500);
         }
         return;
@@ -339,6 +344,18 @@ export function ActionBar({
       logClientError("action_failed", err, { path });
       setSubmitting(false);
     }
+  }
+
+  function handleRecall() {
+    return recallAction("recall", "Are you sure you want to pull this back from review?", "Could not recall this submission.");
+  }
+
+  function handleRecallApproval() {
+    return recallAction(
+      "recall-approval",
+      "Pull this back from approved status for another look?",
+      "Could not recall this approval.",
+    );
   }
 
   return (
@@ -728,6 +745,17 @@ export function ActionBar({
               >
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
                 Mark as Published
+              </button>
+            )}
+
+            {canRecallApproval && (
+              <button
+                disabled={submitting}
+                onClick={handleRecallApproval}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Recall approval
               </button>
             )}
           </div>
